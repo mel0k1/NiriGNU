@@ -646,6 +646,9 @@ boolean_t vm_map_lookup_entry(
  *
  * If map_locked is true, this function will not wait for more space in case
  * of failure. Otherwise, the map is locked.
+ *
+ * The map is always left locked on return, even when NULL is returned;
+ * if it was not locked on entry, the caller must unlock it.
  */
 static struct vm_map_entry *
 vm_map_find_entry_anywhere(struct vm_map *map,
@@ -661,6 +664,10 @@ vm_map_find_entry_anywhere(struct vm_map *map,
 	vm_offset_t max;
 
 	assert(size != 0);
+
+	if (!map_locked) {
+		vm_map_lock(map);
+	}
 
 	max = map->max_offset;
 	if (((mask + 1) & mask) != 0) {
@@ -680,10 +687,6 @@ vm_map_find_entry_anywhere(struct vm_map *map,
 		}
 
 		mask = lowmask;
-	}
-
-	if (!map_locked) {
-		vm_map_lock(map);
 	}
 
 restart:
