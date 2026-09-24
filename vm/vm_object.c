@@ -2423,8 +2423,11 @@ void vm_object_collapse(
 					VM_PAGE_FREE(p);
 				    }
 				    else {
-					assert(pp == VM_PAGE_NULL || !
-					       "vm_object_collapse: bad case");
+					/*
+					 *	The parent cannot have absent pages:
+					 *	it never had an external memory object.
+					 */
+					assert(pp == VM_PAGE_NULL);
 
 					/*
 					 *	Parent now has no page.
