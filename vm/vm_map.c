@@ -3633,6 +3633,7 @@ kern_return_t vm_map_copyin(
 
 
 			if (result != KERN_SUCCESS) {
+				vm_object_deallocate(src_object);
 				vm_map_copy_entry_dispose(copy, new_entry);
 
 				vm_map_lock(src_map);
