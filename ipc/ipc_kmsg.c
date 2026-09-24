@@ -494,6 +494,11 @@ ipc_kmsg_get(
 	if ((size < sizeof(mach_msg_user_header_t)) || mach_msg_user_is_misaligned(size))
 		return MACH_SEND_MSG_TOO_SMALL;
 
+	/* The kernel buffer is sized to hold the expanded message; make sure
+	   the size multiplication above cannot overflow.  */
+	if (size > ((mach_msg_size_t) -1) / IKM_EXPAND_FACTOR)
+		return MACH_SEND_NO_BUFFER;
+
 	if (ksize <= IKM_SAVED_MSG_SIZE) {
 		kmsg = ikm_cache_alloc();
 		if (kmsg == IKM_NULL)

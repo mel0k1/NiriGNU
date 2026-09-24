@@ -499,6 +499,31 @@ void test_msg_emptydesc(void)
 }
 
 
+/* Regression test: a send_size high enough for size * IKM_EXPAND_FACTOR to
+ * overflow used to make the kernel allocate a tiny buffer and copy the full
+ * size into it.  It must simply fail.  */
+void test_msg_too_big(void)
+{
+  struct
+  {
+    mach_msg_header_t header;
+    char body[8];
+  } msg;
+  kern_return_t ret;
+
+  memset (&msg, 0, sizeof (msg));
+  ret = mach_msg (&msg.header,
+                  MACH_SEND_MSG,
+                  0x80000008, /* size * IKM_EXPAND_FACTOR overflows 32 bits,
+                                 and is MACH_MSG_USER_ALIGNMENT aligned both
+                                 with and without USER32 */
+                  0,
+                  MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+  printf ("mach_msg with send_size 0x80000008 returned 0x%x\n", ret);
+  ASSERT (ret != MACH_MSG_SUCCESS, "oversized message was accepted");
+}
+
+
 void recv_to_be_interrupted(void *arg)
 {
   mach_msg_header_t msg;
@@ -587,6 +612,8 @@ main (int argc, char *argv[], int envc, char *envp[])
   test_msg_ports();
   printf("test_msg_emptydesc()\n");
   test_msg_emptydesc();
+  printf("test_msg_too_big()\n");
+  test_msg_too_big();
   printf("test_iters()\n");
   test_iterations();
   printf("test_recv_interrupted()\n");

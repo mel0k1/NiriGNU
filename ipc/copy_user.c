@@ -348,6 +348,10 @@ int copyinmsg (const void *userbuf, void *kernelbuf, const size_t usize, const s
   _Static_assert(!mach_msg_user_is_misaligned(sizeof(mach_msg_user_header_t)),
                  "mach_msg_user_header_t needs to be MACH_MSG_USER_ALIGNMENT aligned.");
 
+  /* Don't even start copying if the kernel buffer can't hold the message.  */
+  if (usize > ksize)
+    return 1;
+
 #ifdef USER32
   if (copyin(&umsg->msgh_bits, &kmsg->msgh_bits, sizeof(kmsg->msgh_bits)))
     return 1;
