@@ -1202,7 +1202,11 @@ kern_return_t vm_fault(
 		 */
 
 		state = (char *) kmem_cache_alloc(&vm_fault_state_cache);
-		current_thread()->ith_other = state;
+		if (state == NULL)
+			/* Out of memory: run the fault without saved state. */
+			continuation = vm_fault_no_continuation;
+		else
+			current_thread()->ith_other = state;
 
 	}
 

@@ -2350,6 +2350,8 @@ vm_map_copy_copy(vm_map_copy_t copy)
 	 */
 
 	new_copy = (vm_map_copy_t) kmem_cache_alloc(&vm_map_copy_cache);
+	if (new_copy == VM_MAP_COPY_NULL)
+		return VM_MAP_COPY_NULL;
 	*new_copy = *copy;
 
 	if (copy->type == VM_MAP_COPY_ENTRY_LIST) {
@@ -3443,6 +3445,8 @@ kern_return_t vm_map_copyin(
 	 */
 
 	copy = (vm_map_copy_t) kmem_cache_alloc(&vm_map_copy_cache);
+	if (copy == VM_MAP_COPY_NULL)
+		return KERN_RESOURCE_SHORTAGE;
 	vm_map_copy_first_entry(copy) =
 	 vm_map_copy_last_entry(copy) = vm_map_copy_to_entry(copy);
 	copy->type = VM_MAP_COPY_ENTRY_LIST;
@@ -3768,6 +3772,10 @@ kern_return_t vm_map_copyin_object(
 	 */
 
 	copy = (vm_map_copy_t) kmem_cache_alloc(&vm_map_copy_cache);
+	if (copy == VM_MAP_COPY_NULL) {
+		vm_object_deallocate(object);
+		return KERN_RESOURCE_SHORTAGE;
+	}
 	vm_map_copy_first_entry(copy) =
 	 vm_map_copy_last_entry(copy) = VM_MAP_ENTRY_NULL;
 	copy->type = VM_MAP_COPY_OBJECT;
@@ -3927,6 +3935,8 @@ kern_return_t vm_map_copyin_page_list(
 	 */
 
 	copy = (vm_map_copy_t) kmem_cache_alloc(&vm_map_copy_cache);
+	if (copy == VM_MAP_COPY_NULL)
+		return KERN_RESOURCE_SHORTAGE;
 	copy->type = VM_MAP_COPY_PAGE_LIST;
 	copy->cpy_npages = 0;
 	copy->offset = src_addr;
