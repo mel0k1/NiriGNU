@@ -1162,6 +1162,10 @@ net_set_filter(
 	 * a normal packet filter structure.
 	 */
 	my_infp = (net_rcv_port_t) kmem_cache_alloc(&net_rcv_cache);
+	if (my_infp == 0) {
+	    ipc_port_release_send(rcv_port);
+	    return (D_NO_MEMORY);
+	}
 	my_infp->rcv_port = rcv_port;
 	is_new_infp = TRUE;
     } else {
@@ -1172,6 +1176,10 @@ net_set_filter(
 	 */
 	my_infp = 0;
 	hash_entp = (net_hash_entry_t) kmem_cache_alloc(&net_hash_entry_cache);
+	if (hash_entp == 0) {
+	    ipc_port_release_send(rcv_port);
+	    return (D_NO_MEMORY);
+	}
 	is_new_infp = FALSE;
     }    
 
