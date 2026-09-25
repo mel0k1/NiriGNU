@@ -691,14 +691,16 @@ memory_object_lock_request(
 #define	PAGEOUT_PAGES							\
 MACRO_BEGIN								\
 	vm_map_copy_t		copy;					\
+	kern_return_t		kr;					\
 	unsigned		i;					\
 	vm_page_t		hp;					\
 									\
 	vm_object_unlock(object);					\
 									\
-	(void) vm_map_copyin_object(new_object, 0, new_offset, &copy);	\
-									\
-	(void) memory_object_data_return(				\
+	kr = vm_map_copyin_object(new_object, 0, new_offset, &copy);	\
+	/* on failure new_object is gone: nothing to write */	\
+	if (kr == KERN_SUCCESS)						\
+	    (void) memory_object_data_return(				\
 		object->pager,						\
 		object->pager_request,					\
 		paging_offset,						\
