@@ -2482,6 +2482,10 @@ ipc_kmsg_copyout_body(
 					mach_port_name_t *dst = (mach_port_name_t*)addr;
 					for (int i=0; i<number; i++) {
 						if (copyout_port(src + i, dst + i)) {
+							vm_size_t user_length =
+								sizeof(mach_port_name_t) * number;
+							kfree(data, length);
+							(void) vm_deallocate(map, addr, user_length);
 							kr = KERN_FAILURE;
 							goto vm_copyout_failure;
 						}
