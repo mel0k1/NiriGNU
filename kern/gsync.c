@@ -25,12 +25,13 @@
 #include <vm/vm_kern.h>
 #include <machine/locore.h>
 
-/* An entry in the global hash table. */
+/* An entry in the global hash table. Buckets are kept apart
+ * to avoid cache-line sharing once we run on multiple CPUs. */
 struct gsync_hbucket
 {
   struct list entries;
   struct kmutex lock;
-};
+} __attribute__ ((aligned (64)));
 
 /* A key used to uniquely identify an address that a thread is
  * waiting on. Its members' values depend on whether said
