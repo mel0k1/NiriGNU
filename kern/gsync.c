@@ -409,7 +409,8 @@ kern_return_t gsync_wake (task_t task,
 
           addr = paddr + (addr & (PAGE_SIZE - 1));
           *(unsigned int *)addr = val;
-          vm_map_remove (kernel_map, addr, addr + sizeof (int));
+          addr -= addr & (PAGE_SIZE - 1);
+          vm_map_remove (kernel_map, addr, addr + PAGE_SIZE);
         }
       else if (copyout (&val, (void *) addr, 4))
         {
