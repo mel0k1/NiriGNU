@@ -938,6 +938,8 @@ device_write_get(
 	if (ior->io_op & IO_INBAND) {
 	    assert(ior->io_count <= sizeof (io_buf_ptr_inband_t));
 	    new_addr = kmem_cache_alloc(&io_inband_cache);
+	    if (new_addr == 0)
+		return (KERN_RESOURCE_SHORTAGE);
 	    memcpy((void*)new_addr, ior->io_data, ior->io_count);
 	    ior->io_data = (io_buf_ptr_t)new_addr;
 	    ior->io_alloc_size = sizeof (io_buf_ptr_inband_t);
@@ -1313,6 +1315,8 @@ kern_return_t device_read_alloc(
 
 	if (ior->io_op & IO_INBAND) {
 	    ior->io_data = (io_buf_ptr_t) kmem_cache_alloc(&io_inband_cache);
+	    if (ior->io_data == 0)
+		return (KERN_RESOURCE_SHORTAGE);
 	    ior->io_alloc_size = sizeof(io_buf_ptr_inband_t);
 	} else {
 	    size = round_page(size);
