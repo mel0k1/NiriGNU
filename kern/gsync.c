@@ -513,9 +513,12 @@ kern_return_t gsync_requeue (task_t task, vm_offset_t src,
 
       /* Splice the list by removing waiters from the source queue
        * and inserting them into the destination queue. */
+      struct list *xp = outp->next, *tp = endp->prev;
+
       inp->prev->next = endp;
-      endp->prev->next = outp->next;
       endp->prev = inp->prev;
+      tp->next = xp;
+      xp->prev = tp;
 
       outp->next = inp;
       inp->prev = outp;
