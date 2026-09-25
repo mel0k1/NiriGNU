@@ -56,7 +56,9 @@ struct kmem_cache ipc_entry_cache;
  *	Purpose:
  *		Allocate an entry out of the space.
  *	Conditions:
- *		The space must be write-locked.  May allocate memory.
+ *		The space must be write-locked.  *sparep supplies a
+ *		pre-allocated entry (IE_NULL allowed), which is consumed
+ *		or freed.  May still allocate memory.
  *	Returns:
  *		KERN_SUCCESS		An entry was allocated.
  *		KERN_INVALID_TASK	The space is dead.
@@ -67,25 +69,37 @@ struct kmem_cache ipc_entry_cache;
 kern_return_t
 ipc_entry_alloc(
 	ipc_space_t	space,
+	ipc_entry_t	*sparep,
 	mach_port_name_t	*namep,
 	ipc_entry_t	*entryp)
 {
 	kern_return_t kr;
-	ipc_entry_t entry;
+	ipc_entry_t entry, spare;
 	rdxtree_key_t key;
 
+	spare = *sparep;
+	*sparep = IE_NULL;
+
 	if (!space->is_active) {
+		if (spare != IE_NULL)
+			ie_free(spare);
 		return KERN_INVALID_TASK;
 	}
 
 	kr = ipc_entry_get(space, namep, entryp);
-	if (kr == KERN_SUCCESS)
+	if (kr == KERN_SUCCESS) {
+		if (spare != IE_NULL)
+			ie_free(spare);
 		return kr;
-
-	entry = ie_alloc();
-	if (entry == IE_NULL) {
-		return KERN_RESOURCE_SHORTAGE;
 	}
+
+	if (spare == IE_NULL) {
+		spare = ie_alloc();
+		if (spare == IE_NULL) {
+			return KERN_RESOURCE_SHORTAGE;
+		}
+	}
+	entry = spare;
 
 	kr = rdxtree_insert_alloc(&space->is_map, entry, &key);
 	if (kr) {
@@ -110,7 +124,9 @@ ipc_entry_alloc(
  *		Allocates/finds an entry with a specific name.
  *		If an existing entry is returned, its type will be nonzero.
  *	Conditions:
- *		The space must be write-locked.  May allocate memory.
+ *		The space must be write-locked.  *sparep supplies a
+ *		pre-allocated entry (IE_NULL allowed), which is consumed
+ *		or freed.  May still allocate memory.
  *	Returns:
  *		KERN_SUCCESS		Found existing entry with same name.
  *		KERN_SUCCESS		Allocated a new entry.
@@ -121,15 +137,22 @@ ipc_entry_alloc(
 kern_return_t
 ipc_entry_alloc_name(
 	ipc_space_t	space,
+	ipc_entry_t	*sparep,
 	mach_port_name_t	name,
 	ipc_entry_t	*entryp)
 {
 	kern_return_t kr;
 	ipc_entry_t entry, e, *prevp;
+	ipc_entry_t spare;
 	void **slot;
 	assert(MACH_PORT_NAME_VALID(name));
 
+	spare = *sparep;
+	*sparep = IE_NULL;
+
 	if (!space->is_active) {
+		if (spare != IE_NULL)
+			ie_free(spare);
 		return KERN_INVALID_TASK;
 	}
 
@@ -138,10 +161,13 @@ ipc_entry_alloc_name(
 		entry = *(ipc_entry_t *) slot;
 
 	if (slot == NULL || entry == IE_NULL) {
-		entry = ie_alloc();
-		if (entry == IE_NULL) {
-			return KERN_RESOURCE_SHORTAGE;
+		if (spare == IE_NULL) {
+			spare = ie_alloc();
+			if (spare == IE_NULL) {
+				return KERN_RESOURCE_SHORTAGE;
+			}
 		}
+		entry = spare;
 
 		entry->ie_bits = 0;
 		entry->ie_object = IO_NULL;
@@ -163,6 +189,9 @@ ipc_entry_alloc_name(
 		*entryp = entry;
 		return KERN_SUCCESS;
 	}
+
+	if (spare != IE_NULL)
+		ie_free(spare);
 
 	if (IE_BITS_TYPE(entry->ie_bits)) {
 		/* Used entry.  */

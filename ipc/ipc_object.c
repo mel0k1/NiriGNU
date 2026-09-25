@@ -152,11 +152,15 @@ ipc_object_alloc_dead(
 	ipc_space_t	space,
 	mach_port_name_t	*namep)
 {
-	ipc_entry_t entry;
+	ipc_entry_t entry, spare;
 	kern_return_t kr;
 
+	spare = ie_alloc();
+	if (spare == IE_NULL)
+		return KERN_RESOURCE_SHORTAGE;
+
 	is_write_lock(space);
-	kr = ipc_entry_alloc(space, namep, &entry);
+	kr = ipc_entry_alloc(space, &spare, namep, &entry);
 	if (kr != KERN_SUCCESS) {
 		is_write_unlock(space);
 		return kr;
@@ -189,11 +193,15 @@ ipc_object_alloc_dead_name(
 	ipc_space_t	space,
 	mach_port_name_t	name)
 {
-	ipc_entry_t entry;
+	ipc_entry_t entry, spare;
 	kern_return_t kr;
 
+	spare = ie_alloc();
+	if (spare == IE_NULL)
+		return KERN_RESOURCE_SHORTAGE;
+
 	is_write_lock(space);
-	kr = ipc_entry_alloc_name(space, name, &entry);
+	kr = ipc_entry_alloc_name(space, &spare, name, &entry);
 	if (kr != KERN_SUCCESS) {
 		is_write_unlock(space);
 		return kr;
@@ -235,7 +243,7 @@ ipc_object_alloc(
 	ipc_object_t		*objectp)
 {
 	ipc_object_t object;
-	ipc_entry_t entry;
+	ipc_entry_t entry, spare;
 	kern_return_t kr;
 
 	assert(otype < IOT_NUMBER);
@@ -256,8 +264,14 @@ ipc_object_alloc(
 
 		memset(pset, 0, sizeof(*pset));
 	}
+	spare = ie_alloc();
+	if (spare == IE_NULL) {
+		io_free(otype, object);
+		return KERN_RESOURCE_SHORTAGE;
+	}
+
 	is_write_lock(space);
-	kr = ipc_entry_alloc(space, namep, &entry);
+	kr = ipc_entry_alloc(space, &spare, namep, &entry);
 	if (kr != KERN_SUCCESS) {
 		is_write_unlock(space);
 		io_free(otype, object);
@@ -302,7 +316,7 @@ ipc_object_alloc_name(
 	ipc_object_t		*objectp)
 {
 	ipc_object_t object;
-	ipc_entry_t entry;
+	ipc_entry_t entry, spare;
 	kern_return_t kr;
 
 	assert(otype < IOT_NUMBER);
@@ -324,8 +338,14 @@ ipc_object_alloc_name(
 		memset(pset, 0, sizeof(*pset));
 	}
 
+	spare = ie_alloc();
+	if (spare == IE_NULL) {
+		io_free(otype, object);
+		return KERN_RESOURCE_SHORTAGE;
+	}
+
 	is_write_lock(space);
-	kr = ipc_entry_alloc_name(space, name, &entry);
+	kr = ipc_entry_alloc_name(space, &spare, name, &entry);
 	if (kr != KERN_SUCCESS) {
 		is_write_unlock(space);
 		io_free(otype, object);
@@ -611,17 +631,23 @@ ipc_object_copyout(
 	mach_port_name_t	*namep)
 {
 	mach_port_name_t name;
-	ipc_entry_t entry;
+	ipc_entry_t entry, spare;
 	kern_return_t kr;
 
 	assert(IO_VALID(object));
 	assert(io_otype(object) == IOT_PORT);
+
+	spare = ie_alloc();
+	if (spare == IE_NULL)
+		return KERN_RESOURCE_SHORTAGE;
 
 	is_write_lock(space);
 
 	for (;;) {
 		if (!space->is_active) {
 			is_write_unlock(space);
+			if (spare != IE_NULL)
+				ie_free(spare);
 			return KERN_INVALID_TASK;
 		}
 
@@ -630,10 +656,12 @@ ipc_object_copyout(
 			/* object is locked and active */
 
 			assert(entry->ie_bits & MACH_PORT_TYPE_SEND_RECEIVE);
+			if (spare != IE_NULL)
+				ie_free(spare);
 			break;
 		}
 
-		kr = ipc_entry_alloc(space, &name, &entry);
+		kr = ipc_entry_alloc(space, &spare, &name, &entry);
 		if (kr != KERN_SUCCESS) {
 			is_write_unlock(space);
 			return kr;
@@ -694,15 +722,19 @@ ipc_object_copyout_name(
 	mach_port_name_t	name)
 {
 	mach_port_name_t oname;
-	ipc_entry_t oentry;
+	ipc_entry_t oentry, spare;
 	ipc_entry_t entry;
 	kern_return_t kr;
 
 	assert(IO_VALID(object));
 	assert(io_otype(object) == IOT_PORT);
 
+	spare = ie_alloc();
+	if (spare == IE_NULL)
+		return KERN_RESOURCE_SHORTAGE;
+
 	is_write_lock(space);
-	kr = ipc_entry_alloc_name(space, name, &entry);
+	kr = ipc_entry_alloc_name(space, &spare, name, &entry);
 	if (kr != KERN_SUCCESS) {
 		is_write_unlock(space);
 		return kr;
@@ -877,11 +909,15 @@ ipc_object_rename(
 	mach_port_name_t	oname,
 	mach_port_name_t	nname)
 {
-	ipc_entry_t oentry, nentry;
+	ipc_entry_t oentry, nentry, spare;
 	kern_return_t kr;
 
+	spare = ie_alloc();
+	if (spare == IE_NULL)
+		return KERN_RESOURCE_SHORTAGE;
+
 	is_write_lock(space);
-	kr = ipc_entry_alloc_name(space, nname, &nentry);
+	kr = ipc_entry_alloc_name(space, &spare, nname, &nentry);
 	if (kr != KERN_SUCCESS) {
 		is_write_unlock(space);
 		return kr;

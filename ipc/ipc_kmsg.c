@@ -1957,7 +1957,7 @@ ipc_kmsg_copyout_header(
 
 	if (IP_VALID(reply)) {
 		ipc_port_t notify_port;
-		ipc_entry_t entry;
+		ipc_entry_t entry, spare;
 		kern_return_t kr;
 
 		/*
@@ -1979,6 +1979,11 @@ ipc_kmsg_copyout_header(
 		 *	so any status calls in progress will be done.
 		 */
 
+		spare = ie_alloc();
+		if (spare == IE_NULL)
+			return (MACH_RCV_HEADER_ERROR|
+				MACH_MSG_IPC_KERNEL);
+
 		is_write_lock(space);
 
 		for (;;) {
@@ -1986,6 +1991,8 @@ ipc_kmsg_copyout_header(
 
 			if (!space->is_active) {
 				is_write_unlock(space);
+				if (spare != IE_NULL)
+					ie_free(spare);
 				return (MACH_RCV_HEADER_ERROR|
 					MACH_MSG_IPC_SPACE);
 			}
@@ -1995,6 +2002,8 @@ ipc_kmsg_copyout_header(
 								     notify);
 				if (notify_port == IP_NULL) {
 					is_write_unlock(space);
+					if (spare != IE_NULL)
+						ie_free(spare);
 					return MACH_RCV_INVALID_NOTIFY;
 				}
 			} else
@@ -2015,6 +2024,8 @@ ipc_kmsg_copyout_header(
 
 				assert(entry->ie_bits &
 						MACH_PORT_TYPE_SEND_RECEIVE);
+				if (spare != IE_NULL)
+					ie_free(spare);
 				break;
 			}
 
@@ -2029,12 +2040,15 @@ ipc_kmsg_copyout_header(
 				ip_lock(dest);
 				is_write_unlock(space);
 
+				if (spare != IE_NULL)
+					ie_free(spare);
+
 				reply = IP_DEAD;
 				reply_name = MACH_PORT_NAME_DEAD;
 				goto copyout_dest;
 			}
 
-			kr = ipc_entry_alloc(space, &reply_name, &entry);
+			kr = ipc_entry_alloc(space, &spare, &reply_name, &entry);
 			if (kr != KERN_SUCCESS) {
 				ip_unlock(reply);
 

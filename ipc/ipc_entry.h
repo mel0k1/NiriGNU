@@ -96,11 +96,17 @@ extern struct kmem_cache ipc_entry_cache;
 #define ie_alloc()	((ipc_entry_t) kmem_cache_alloc(&ipc_entry_cache))
 #define	ie_free(e)	kmem_cache_free(&ipc_entry_cache, (vm_offset_t) (e))
 
+/*
+ * Both take a pre-allocated entry at *sparep (IE_NULL allowed).
+ * The spare is consumed or freed; *sparep is IE_NULL on return.
+ */
 extern kern_return_t
-ipc_entry_alloc(ipc_space_t space, mach_port_name_t *namep, ipc_entry_t *entryp);
+ipc_entry_alloc(ipc_space_t space, ipc_entry_t *sparep,
+                mach_port_name_t *namep, ipc_entry_t *entryp);
 
 extern kern_return_t
-ipc_entry_alloc_name(ipc_space_t space, mach_port_name_t name, ipc_entry_t *entryp);
+ipc_entry_alloc_name(ipc_space_t space, ipc_entry_t *sparep,
+                     mach_port_name_t name, ipc_entry_t *entryp);
 
 ipc_entry_t
 db_ipc_object_by_name(
