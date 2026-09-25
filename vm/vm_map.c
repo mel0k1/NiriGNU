@@ -3614,8 +3614,10 @@ kern_return_t vm_map_copyin(
 		 */
 
 		if (was_wired) {
+			kern_return_t	result;
+
 			vm_object_lock(src_object);
-			(void) vm_object_copy_slowly(
+			result = vm_object_copy_slowly(
 					src_object,
 					src_offset,
 					src_size,
@@ -3623,6 +3625,14 @@ kern_return_t vm_map_copyin(
 					&new_entry->object.vm_object);
 			new_entry->offset = 0;
 			new_entry->needs_copy = FALSE;
+
+			if (result != KERN_SUCCESS) {
+				vm_object_deallocate(src_object);
+				vm_map_copy_entry_dispose(copy, new_entry);
+
+				vm_map_lock(src_map);
+				RETURN(result);
+			}
 		} else {
 			kern_return_t	result;
 
