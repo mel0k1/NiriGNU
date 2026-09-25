@@ -118,6 +118,14 @@ gsync_key_hash (const union gsync_key *keyp)
   ret = MIX2_LL (ret, keyp->any.v & ~0U);
   ret = MIX2_LL (ret, keyp->any.v >> 32);
 #endif
+
+  /* The mixing above is linear, so structured keys can pile
+   * up in a few buckets. Add a non-linear final mix. */
+  ret ^= ret >> 16;
+  ret *= 0x7feb352dU;
+  ret ^= ret >> 15;
+  ret *= 0x846ca68bU;
+  ret ^= ret >> 16;
   return (ret);
 }
 
