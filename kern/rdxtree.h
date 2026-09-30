@@ -91,7 +91,7 @@ rdxtree_init(struct rdxtree *tree)
 static inline int
 rdxtree_insert(struct rdxtree *tree, rdxtree_key_t key, void *ptr)
 {
-    return rdxtree_insert_common(tree, key, ptr, NULL);
+    return rdxtree_insert_common(tree, key, ptr, NULL, 1);
 }
 
 /*
@@ -105,7 +105,7 @@ static inline int
 rdxtree_insert_slot(struct rdxtree *tree, rdxtree_key_t key,
                     void *ptr, void ***slotp)
 {
-    return rdxtree_insert_common(tree, key, ptr, slotp);
+    return rdxtree_insert_common(tree, key, ptr, slotp, 1);
 }
 
 /*
@@ -117,7 +117,7 @@ rdxtree_insert_slot(struct rdxtree *tree, rdxtree_key_t key,
 static inline int
 rdxtree_insert_alloc(struct rdxtree *tree, void *ptr, rdxtree_key_t *keyp)
 {
-    return rdxtree_insert_alloc_common(tree, ptr, keyp, NULL);
+    return rdxtree_insert_alloc_common(tree, ptr, keyp, NULL, 1);
 }
 
 /*
@@ -133,7 +133,33 @@ static inline int
 rdxtree_insert_alloc_slot(struct rdxtree *tree, void *ptr,
                           rdxtree_key_t *keyp, void ***slotp)
 {
-    return rdxtree_insert_alloc_common(tree, ptr, keyp, slotp);
+    return rdxtree_insert_alloc_common(tree, ptr, keyp, slotp, 1);
+}
+
+/*
+ * Insert a pointer in a tree, never blocking.
+ *
+ * Like rdxtree_insert(), but node allocation, if needed, is performed
+ * without blocking and may fail with KERN_RESOURCE_SHORTAGE.
+ */
+static inline int
+rdxtree_insert_try(struct rdxtree *tree, rdxtree_key_t key, void *ptr)
+{
+    return rdxtree_insert_common(tree, key, ptr, NULL, 0);
+}
+
+/*
+ * Insert a pointer in a tree, for which a new key is allocated,
+ * never blocking.
+ *
+ * Like rdxtree_insert_alloc(), but node allocation, if needed, is
+ * performed without blocking and may fail with KERN_RESOURCE_SHORTAGE.
+ */
+static inline int
+rdxtree_insert_alloc_try(struct rdxtree *tree, void *ptr,
+                         rdxtree_key_t *keyp)
+{
+    return rdxtree_insert_alloc_common(tree, ptr, keyp, NULL, 0);
 }
 
 /*

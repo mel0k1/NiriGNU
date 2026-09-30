@@ -215,6 +215,11 @@ void kmem_cache_init(struct kmem_cache *cache, const char *name,
 vm_offset_t kmem_cache_alloc(struct kmem_cache *cache);
 
 /*
+ * Allocate an object from a cache without ever blocking.
+ */
+vm_offset_t kmem_cache_alloc_try(struct kmem_cache *cache);
+
+/*
  * Release an object to its cache.
  */
 void kmem_cache_free(struct kmem_cache *cache, vm_offset_t obj);

@@ -1148,6 +1148,56 @@ slab_alloc:
     return (vm_offset_t)buf;
 }
 
+/*
+ * Allocate an object from a cache without ever blocking.
+ *
+ * Returns 0 on failure.
+ */
+vm_offset_t kmem_cache_alloc_try(struct kmem_cache *cache)
+{
+    void *buf;
+
+#if SLAB_USE_CPU_POOLS
+    struct kmem_cpu_pool *cpu_pool;
+
+    cpu_pool = kmem_cpu_pool_get(cache);
+
+    if (cpu_pool->flags & KMEM_CF_NO_CPU_POOL)
+        goto slab_alloc;
+
+    simple_lock(&cpu_pool->lock);
+
+    if (likely(cpu_pool->nr_objs > 0)) {
+        buf = kmem_cpu_pool_pop(cpu_pool);
+        simple_unlock(&cpu_pool->lock);
+
+        if (cpu_pool->flags & KMEM_CF_VERIFY)
+            kmem_cache_alloc_verify(cache, buf, KMEM_AV_CONSTRUCT);
+
+        return (vm_offset_t)buf;
+    }
+
+    simple_unlock(&cpu_pool->lock);
+
+slab_alloc:
+#endif /* SLAB_USE_CPU_POOLS */
+
+    simple_lock(&cache->lock);
+    buf = kmem_cache_alloc_from_slab(cache);
+    simple_unlock(&cache->lock);
+
+    if (buf == NULL)
+        return 0;
+
+    if (cache->flags & KMEM_CF_VERIFY)
+        kmem_cache_alloc_verify(cache, buf, KMEM_AV_NOCONSTRUCT);
+
+    if (cache->ctor != NULL)
+        cache->ctor(buf);
+
+    return (vm_offset_t)buf;
+}
+
 static void kmem_cache_free_verify(struct kmem_cache *cache, void *buf)
 {
     struct rbtree_node *node;

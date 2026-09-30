@@ -101,7 +101,7 @@ ipc_entry_alloc(
 	}
 	entry = spare;
 
-	kr = rdxtree_insert_alloc(&space->is_map, entry, &key);
+	kr = rdxtree_insert_alloc_try(&space->is_map, entry, &key);
 	if (kr) {
 		ie_free(entry);
 		return kr;
@@ -177,8 +177,8 @@ ipc_entry_alloc_name(
 		if (slot != NULL)
 			rdxtree_replace_slot(slot, entry);
 		else {
-			kr = rdxtree_insert(&space->is_map,
-					    (rdxtree_key_t) name, entry);
+			kr = rdxtree_insert_try(&space->is_map,
+						(rdxtree_key_t) name, entry);
 			if (kr != KERN_SUCCESS) {
 				ie_free(entry);
 				return kr;

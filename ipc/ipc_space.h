@@ -277,7 +277,7 @@ ipc_entry_dealloc(
 	})
 
 /* Insert (OBJ, ENTRY) pair into the reverse mapping.  SPACE must
-   be write-locked.  */
+   be write-locked.  Does not block.  */
 static inline kern_return_t
 ipc_reverse_insert(ipc_space_t space,
 		   ipc_object_t obj,
@@ -285,8 +285,26 @@ ipc_reverse_insert(ipc_space_t space,
 {
 	assert(space != IS_NULL);
 	assert(obj != IO_NULL);
-	return (kern_return_t) rdxtree_insert(&space->is_reverse_map,
-					      KEY(obj), entry);
+	return (kern_return_t) rdxtree_insert_try(&space->is_reverse_map,
+						  KEY(obj), entry);
+}
+
+/* Replace the ENTRY registered for OBJ.  SPACE must be write-locked.
+   Returns TRUE if OBJ was registered.  Does not block.  */
+static inline boolean_t
+ipc_reverse_replace(ipc_space_t space,
+		   ipc_object_t obj,
+		   ipc_entry_t entry)
+{
+	void **slot;
+
+	assert(space != IS_NULL);
+	assert(obj != IO_NULL);
+	slot = rdxtree_lookup_slot(&space->is_reverse_map, KEY(obj));
+	if (slot == NULL)
+		return FALSE;
+	rdxtree_replace_slot(slot, entry);
+	return TRUE;
 }
 
 /* Remove OBJ from the reverse mapping.  SPACE must be

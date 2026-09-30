@@ -61,10 +61,11 @@ rdxtree_iter_init(struct rdxtree_iter *iter)
 }
 
 int rdxtree_insert_common(struct rdxtree *tree, rdxtree_key_t key,
-                          void *ptr, void ***slotp);
+                          void *ptr, void ***slotp, int may_block);
 
 int rdxtree_insert_alloc_common(struct rdxtree *tree, void *ptr,
-                                rdxtree_key_t *keyp, void ***slotp);
+                                rdxtree_key_t *keyp, void ***slotp,
+                                int may_block);
 
 void * rdxtree_lookup_common(const struct rdxtree *tree, rdxtree_key_t key,
                              int get_slot);

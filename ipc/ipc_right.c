@@ -1322,6 +1322,7 @@ ipc_right_copyin_check(
  *	Returns:
  *		KERN_SUCCESS		Acquired an object, possibly IO_DEAD.
  *		KERN_INVALID_RIGHT	Name doesn't denote correct right.
+ *		KERN_RESOURCE_SHORTAGE	Couldn't update the reverse map.
  */
 
 kern_return_t
@@ -1402,13 +1403,20 @@ ipc_right_copyin(
 		assert(port->ip_receiver == space);
 
 		if (bits & MACH_PORT_TYPE_SEND) {
+			kern_return_t kr;
+
 			assert(IE_BITS_TYPE(bits) ==
 					MACH_PORT_TYPE_SEND_RECEIVE);
 			assert(IE_BITS_UREFS(bits) > 0);
 			assert(port->ip_srights > 0);
 
 			entry->ie_name = name;
-			ipc_reverse_insert(space, (ipc_object_t) port, entry);
+			kr = ipc_reverse_insert(space, (ipc_object_t) port,
+						entry);
+			if (kr == KERN_RESOURCE_SHORTAGE) {
+				ip_unlock(port);
+				return kr;
+			}
 
 			ip_reference(port);
 		} else {
@@ -1841,6 +1849,7 @@ ipc_right_copyin_two(
  *		KERN_UREFS_OVERFLOW	User-refs would overflow;
  *			guaranteed not to happen with a fresh entry
  *			or if overflow=TRUE was specified.
+ *		KERN_RESOURCE_SHORTAGE	Couldn't update the reverse map.
  */
 
 kern_return_t
@@ -1854,6 +1863,7 @@ ipc_right_copyout(
 {
 	ipc_entry_bits_t bits = entry->ie_bits;
 	ipc_port_t port;
+	kern_return_t kr;
 
 	assert(IO_VALID(object));
 	assert(io_otype(object) == IOT_PORT);
@@ -1917,7 +1927,13 @@ ipc_right_copyout(
 			/* entry is locked holding ref, so can use port */
 
 			entry->ie_name = name;
-			ipc_reverse_insert(space, (ipc_object_t) port, entry);
+			kr = ipc_reverse_insert(space, (ipc_object_t) port,
+						entry);
+			if (kr == KERN_RESOURCE_SHORTAGE) {
+				entry->ie_object = IO_NULL;
+				ipc_entry_dealloc(space, name, entry);
+				return kr;
+			}
 		}
 
 		entry->ie_bits = (bits | MACH_PORT_TYPE_SEND) + 1;
@@ -1989,6 +2005,7 @@ ipc_right_copyout(
  *		the space is unlocked.
  *	Returns:
  *		KERN_SUCCESS		Moved entry to new name.
+ *		KERN_RESOURCE_SHORTAGE	Couldn't update the reverse map.
  */
 
 kern_return_t
@@ -2002,9 +2019,35 @@ ipc_right_rename(
 	ipc_entry_bits_t bits = oentry->ie_bits;
 	ipc_port_request_index_t request = oentry->ie_request;
 	ipc_object_t object = oentry->ie_object;
+	kern_return_t kr;
 
 	assert(space->is_active);
 	assert(oname != nname);
+
+	if (IE_BITS_TYPE(bits) == MACH_PORT_TYPE_SEND) {
+		ipc_port_t port;
+
+		/*
+		 *	Update the reverse mapping first, so that
+		 *	a resource shortage leaves the space untouched.
+		 */
+
+		port = (ipc_port_t) object;
+		assert(port != IP_NULL);
+
+		nentry->ie_name = nname;
+
+		if (!ipc_reverse_replace(space, (ipc_object_t) port,
+						 nentry)) {
+			kr = ipc_reverse_insert(space, (ipc_object_t) port,
+							nentry);
+			if (kr) {
+				ipc_entry_dealloc(space, nname, nentry);
+				is_write_unlock(space);
+				return kr;
+			}
+		}
+	}
 
 	/*
 	 *	If IE_BITS_COMPAT, we can't allow the entry to be renamed
@@ -2042,7 +2085,7 @@ ipc_right_rename(
 		ipc_marequest_rename(space, oname, nname);
 	}
 
-	/* initialize nentry before letting ipc_reverse_insert see it */
+	/* initialize nentry */
 
 	assert((nentry->ie_bits & IE_BITS_RIGHT_MASK) == 0);
 	nentry->ie_bits |= bits & IE_BITS_RIGHT_MASK;
@@ -2050,17 +2093,10 @@ ipc_right_rename(
 	nentry->ie_object = object;
 
 	switch (IE_BITS_TYPE(bits)) {
-	    case MACH_PORT_TYPE_SEND: {
-		ipc_port_t port;
-
-		port = (ipc_port_t) object;
-		assert(port != IP_NULL);
-
-		ipc_reverse_remove(space, (ipc_object_t) port);
-		nentry->ie_name = nname;
-		ipc_reverse_insert(space, (ipc_object_t) port, nentry);
+	    case MACH_PORT_TYPE_SEND:
+	    case MACH_PORT_TYPE_SEND_ONCE:
+	    case MACH_PORT_TYPE_DEAD_NAME:
 		break;
-	    }
 
 	    case MACH_PORT_TYPE_RECEIVE:
 	    case MACH_PORT_TYPE_SEND_RECEIVE: {
@@ -2093,10 +2129,6 @@ ipc_right_rename(
 		ips_unlock(pset);
 		break;
 	    }
-
-	    case MACH_PORT_TYPE_SEND_ONCE:
-	    case MACH_PORT_TYPE_DEAD_NAME:
-		break;
 
 	    default:
 #if MACH_ASSERT

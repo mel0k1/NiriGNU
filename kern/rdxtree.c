@@ -157,7 +157,8 @@ rdxtree_node_to_entry(struct rdxtree_node *node)
 }
 
 static int
-rdxtree_node_create(struct rdxtree_node **nodep, unsigned int height)
+rdxtree_node_create(struct rdxtree_node **nodep, unsigned int height,
+                    int may_block)
 {
     struct rdxtree_node *node;
 
@@ -170,7 +171,11 @@ rdxtree_node_create(struct rdxtree_node **nodep, unsigned int height)
     }
 #endif /* RDXTREE_ENABLE_NODE_CREATION_FAILURES */
 
-    node = (struct rdxtree_node *) kmem_cache_alloc(&rdxtree_node_cache);
+    if (may_block)
+        node = (struct rdxtree_node *) kmem_cache_alloc(&rdxtree_node_cache);
+    else
+        node = (struct rdxtree_node *)
+               kmem_cache_alloc_try(&rdxtree_node_cache);
 
     if (node == NULL)
         return ERR_NOMEM;
@@ -346,7 +351,7 @@ rdxtree_shrink(struct rdxtree *tree)
 }
 
 static int
-rdxtree_grow(struct rdxtree *tree, rdxtree_key_t key)
+rdxtree_grow(struct rdxtree *tree, rdxtree_key_t key, int may_block)
 {
     struct rdxtree_node *root, *node;
     unsigned int new_height;
@@ -365,7 +370,7 @@ rdxtree_grow(struct rdxtree *tree, rdxtree_key_t key)
     root = rdxtree_entry_addr(tree->root);
 
     do {
-        error = rdxtree_node_create(&node, tree->height);
+        error = rdxtree_node_create(&node, tree->height, may_block);
 
         if (error) {
             rdxtree_shrink(tree);
@@ -434,7 +439,7 @@ rdxtree_insert_bm_clear(struct rdxtree_node *node, unsigned int index)
 
 int
 rdxtree_insert_common(struct rdxtree *tree, rdxtree_key_t key,
-                      void *ptr, void ***slotp)
+                      void *ptr, void ***slotp, int may_block)
 {
     struct rdxtree_node *node, *prev;
     unsigned int height, shift, index = 0;
@@ -444,7 +449,7 @@ rdxtree_insert_common(struct rdxtree *tree, rdxtree_key_t key,
     assert(rdxtree_check_alignment(ptr));
 
     if (unlikely(key > rdxtree_max_key(tree->height))) {
-        error = rdxtree_grow(tree, key);
+        error = rdxtree_grow(tree, key, may_block);
 
         if (error)
             return error;
@@ -470,7 +475,7 @@ rdxtree_insert_common(struct rdxtree *tree, rdxtree_key_t key,
 
     do {
         if (node == NULL) {
-            error = rdxtree_node_create(&node, height - 1);
+            error = rdxtree_node_create(&node, height - 1, may_block);
 
             if (error) {
                 if (prev == NULL)
@@ -510,7 +515,8 @@ rdxtree_insert_common(struct rdxtree *tree, rdxtree_key_t key,
 
 int
 rdxtree_insert_alloc_common(struct rdxtree *tree, void *ptr,
-                            rdxtree_key_t *keyp, void ***slotp)
+                            rdxtree_key_t *keyp, void ***slotp,
+                            int may_block)
 {
     struct rdxtree_node *node, *prev;
     unsigned int height, shift, index = 0;
@@ -543,7 +549,7 @@ rdxtree_insert_alloc_common(struct rdxtree *tree, void *ptr,
 
     do {
         if (node == NULL) {
-            error = rdxtree_node_create(&node, height - 1);
+            error = rdxtree_node_create(&node, height - 1, may_block);
 
             if (error) {
                 rdxtree_cleanup(tree, prev);
@@ -576,7 +582,7 @@ rdxtree_insert_alloc_common(struct rdxtree *tree, void *ptr,
 
 grow:
     key = rdxtree_max_key(height) + 1;
-    error = rdxtree_insert_common(tree, key, ptr, slotp);
+    error = rdxtree_insert_common(tree, key, ptr, slotp, may_block);
 
     if (error)
         return error;
