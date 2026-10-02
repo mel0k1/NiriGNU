@@ -1128,6 +1128,14 @@ kdinit(void)
 	k_comm |= K_CB_ENBLIRQ;		/* enable interrupt */
 	kd_sendcmd(KC_CMD_WRITE);	/* write new ctlr command byte */
 	kd_senddata(k_comm);
+
+	/* Poll for the LED ACKs while the keyboard interrupt is still
+	   masked, otherwise the interrupt handler races kd_getdata.  */
+	cnsetleds(kd_state = KS_NORMAL);
+					/* clear the LEDs AFTER we
+					   enable the keyboard controller.
+					   This keeps NUM-LOCK from being
+					   set on the NEC Versa. */
 	unmask_irq(KBD_IRQ);
 	kd_initialized = TRUE;
 
@@ -1144,12 +1152,6 @@ kdinit(void)
 	   we should start.  */
 	kd_setpos(ONE_PAGE - ONE_LINE); printf("\n");
 #endif /* ENABLE_IMMEDIATE_CONSOLE */
-
-	cnsetleds(kd_state = KS_NORMAL);
-					/* clear the LEDs AFTER we
-					   enable the keyboard controller.
-					   This keeps NUM-LOCK from being
-					   set on the NEC Versa. */
 
 	/* Allocate the input buffer.  */
 	ttychars(&kd_tty);
