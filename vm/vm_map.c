@@ -4035,8 +4035,25 @@ make_continuation:
 			    cont_args->src_addr = src_start;
 			    cont_args->src_len = len - (src_start - src_addr);
 			    if (src_destroy) {
-			    	cont_args->destroy_addr = cont_args->src_addr;
-				cont_args->destroy_len = cont_args->src_len;
+				if (steal_pages) {
+				    cont_args->destroy_addr =
+					cont_args->src_addr;
+				    cont_args->destroy_len =
+					cont_args->src_len;
+				}
+				else {
+				    /*
+				     *  Nobody destroys the source ranges
+				     *  of the chunks already copied in:
+				     *  carry the whole range down to the
+				     *  final destroy-only continuation.
+				     */
+				    cont_args->destroy_addr =
+					trunc_page(src_addr);
+				    cont_args->destroy_len =
+					round_page(src_addr + len) -
+					trunc_page(src_addr);
+				}
 			    }
 			    else {
 			    	cont_args->destroy_addr = (vm_offset_t) 0;
