@@ -3843,7 +3843,8 @@ static kern_return_t	vm_map_copyin_page_list_cont(
 			cont_args->src_addr, cont_args->src_len, src_destroy,
 			cont_args->steal_pages, copy_result, TRUE);
 
-		if (src_destroy && !cont_args->steal_pages &&
+		if (result == KERN_SUCCESS &&
+		    src_destroy && !cont_args->steal_pages &&
 			vm_map_copy_has_cont(*copy_result)) {
 			    vm_map_copyin_args_t	new_args;
 		    	    /*
