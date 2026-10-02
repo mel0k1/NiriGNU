@@ -3354,9 +3354,10 @@ error:
 		vm_map_entry_wakeup(dst_map);
 
 	/*
-	 *	Consume on success logic.
+	 *	Consume on success logic.  The last continuation
+	 *	may have returned no copy at all.
 	 */
-	if (copy != orig_copy) {
+	if (copy != orig_copy && copy != VM_MAP_COPY_NULL) {
 		kmem_cache_free(&vm_map_copy_cache, (vm_offset_t) copy);
 	}
 	if (result == KERN_SUCCESS) {
