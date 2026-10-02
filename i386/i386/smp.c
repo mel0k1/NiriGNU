@@ -60,12 +60,6 @@ static void smp_send_ipi(unsigned logical_id, unsigned vector)
         cpu_pause();
     } while(lapic->icr_low.delivery_status == SEND_PENDING);
 
-    apic_send_ipi(NO_SHORTHAND, FIXED, LOGICAL, DE_ASSERT, EDGE, vector, logical_id);
-
-    do {
-        cpu_pause();
-    } while(lapic->icr_low.delivery_status == SEND_PENDING);
-
     cpu_intr_restore(flags);
 }
 
