@@ -364,7 +364,7 @@ static inline void * kmem_bufctl_to_buf(union kmem_bufctl *bufctl,
 }
 
 static vm_offset_t
-kmem_pagealloc_physmem(vm_size_t size)
+kmem_pagealloc_physmem(vm_size_t size, int may_block)
 {
     struct vm_page *page;
 
@@ -375,6 +375,9 @@ kmem_pagealloc_physmem(vm_size_t size)
 
         if (page != NULL)
             break;
+
+        if (!may_block)
+            return 0;
 
         VM_PAGE_WAIT(NULL);
     }
@@ -425,11 +428,11 @@ kmem_pagefree_virtual(vm_offset_t addr, vm_size_t size)
 }
 
 static vm_offset_t
-kmem_pagealloc(vm_size_t size, vm_size_t align, int flags)
+kmem_pagealloc(vm_size_t size, vm_size_t align, int flags, int may_block)
 {
     assert(align <= size);
     return (flags & KMEM_CF_PHYSMEM)
-           ? kmem_pagealloc_physmem(size)
+           ? kmem_pagealloc_physmem(size, may_block)
            : kmem_pagealloc_virtual(size, align);
 }
 
@@ -467,7 +470,7 @@ static void kmem_slab_create_verify(struct kmem_slab *slab,
  * The caller must drop all locks before calling this function.
  */
 static struct kmem_slab * kmem_slab_create(struct kmem_cache *cache,
-                                           size_t color)
+                                           size_t color, int may_block)
 {
     struct kmem_slab *slab;
     union kmem_bufctl *bufctl;
@@ -475,7 +478,10 @@ static struct kmem_slab * kmem_slab_create(struct kmem_cache *cache,
     unsigned long buffers;
     vm_offset_t slab_buf;
 
-    slab_buf = kmem_pagealloc(cache->slab_size, cache->align, cache->flags);
+    assert(may_block || (cache->flags & KMEM_CF_PHYSMEM));
+
+    slab_buf = kmem_pagealloc(cache->slab_size, cache->align, cache->flags,
+                              may_block);
 
     if (slab_buf == 0)
         return NULL;
@@ -887,11 +893,14 @@ static inline int kmem_cache_empty(struct kmem_cache *cache)
     return cache->nr_objs == cache->nr_bufs;
 }
 
-static int kmem_cache_grow(struct kmem_cache *cache)
+static int kmem_cache_grow(struct kmem_cache *cache, int may_block)
 {
     struct kmem_slab *slab;
     size_t color;
     int empty;
+
+    if (!may_block && !(cache->flags & KMEM_CF_PHYSMEM))
+        return 0;
 
     simple_lock(&cache->lock);
 
@@ -908,7 +917,7 @@ static int kmem_cache_grow(struct kmem_cache *cache)
 
     simple_unlock(&cache->lock);
 
-    slab = kmem_slab_create(cache, color);
+    slab = kmem_slab_create(cache, color, may_block);
 
     simple_lock(&cache->lock);
 
@@ -1111,7 +1120,7 @@ fast_alloc:
         if (!filled) {
             simple_unlock(&cpu_pool->lock);
 
-            filled = kmem_cache_grow(cache);
+            filled = kmem_cache_grow(cache, 1);
 
             if (!filled)
                 return 0;
@@ -1131,7 +1140,7 @@ slab_alloc:
     simple_unlock(&cache->lock);
 
     if (buf == NULL) {
-        filled = kmem_cache_grow(cache);
+        filled = kmem_cache_grow(cache, 1);
 
         if (!filled)
             return 0;
@@ -1155,6 +1164,7 @@ slab_alloc:
  */
 vm_offset_t kmem_cache_alloc_try(struct kmem_cache *cache)
 {
+    int filled;
     void *buf;
 
 #if SLAB_USE_CPU_POOLS
@@ -1179,15 +1189,22 @@ vm_offset_t kmem_cache_alloc_try(struct kmem_cache *cache)
 
     simple_unlock(&cpu_pool->lock);
 
-slab_alloc:
 #endif /* SLAB_USE_CPU_POOLS */
+
+slab_alloc:
 
     simple_lock(&cache->lock);
     buf = kmem_cache_alloc_from_slab(cache);
     simple_unlock(&cache->lock);
 
-    if (buf == NULL)
-        return 0;
+    if (buf == NULL) {
+        filled = kmem_cache_grow(cache, 0);
+
+        if (!filled)
+            return 0;
+
+        goto slab_alloc;
+    }
 
     if (cache->flags & KMEM_CF_VERIFY)
         kmem_cache_alloc_verify(cache, buf, KMEM_AV_NOCONSTRUCT);
@@ -1449,7 +1466,7 @@ vm_offset_t kalloc(vm_size_t size)
         if ((buf != 0) && (cache->flags & KMEM_CF_VERIFY))
             kalloc_verify(cache, buf, size);
     } else if (size <= PAGE_SIZE) {
-        buf = (void *)kmem_pagealloc_physmem(PAGE_SIZE);
+        buf = (void *)kmem_pagealloc_physmem(PAGE_SIZE, 1);
     } else {
         buf = (void *)kmem_pagealloc_virtual(size, 0);
     }
