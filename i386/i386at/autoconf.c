@@ -71,8 +71,10 @@ struct	bus_device	bus_device_init[] = {
      '?',    0,   -1,    -1,    0,   0,        0,   SPL_TTY, 4},
   {&comdriver, "com", 1, comintr, 0x2f8, 8, 0x2f8,
      '?',    0,   -1,    -1,    0,   0,        0,   SPL_TTY, 3},
+#if NCOM > 2
   {&comdriver, "com", 2, comintr, 0x3e8, 8, 0x3e8,
      '?',    0,   -1,    -1,    0,   0,        0,   SPL_TTY, 5},
+#endif /* NCOM > 2 */
 #endif /* NCOM > 0 */
 
 #ifdef MACH_LPR
