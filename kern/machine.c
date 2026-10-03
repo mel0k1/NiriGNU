@@ -84,9 +84,6 @@ void cpu_up(int cpu)
 
 	processor = cpu_to_processor(cpu);
 	pset_lock(&default_pset);
-#if	MACH_HOST
-	pset_lock(slave_pset);
-#endif
 	s = splsched();
 	processor_lock(processor);
 #if	NCPUS > 1
@@ -95,18 +92,16 @@ void cpu_up(int cpu)
 	ms = &machine_slot[cpu];
 	ms->running = TRUE;
 	machine_info.avail_cpus++;
-#if	MACH_HOST
-	if (cpu != 0)
-		pset_add_processor(slave_pset, processor);
-	else
-#endif
-		pset_add_processor(&default_pset, processor);
+	/*
+	 * Add every processor to the default pset: the legacy
+	 * slave pset is never assigned any tasks, so putting the
+	 * secondary processors there just pins every task to the
+	 * master CPU.  task_assign() still allows moving tasks.
+	 */
+	pset_add_processor(&default_pset, processor);
 	processor->state = PROCESSOR_RUNNING;
 	processor_unlock(processor);
 	splx(s);
-#if	MACH_HOST
-	pset_unlock(slave_pset);
-#endif
 	pset_unlock(&default_pset);
 }
 
