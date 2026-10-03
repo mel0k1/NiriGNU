@@ -68,7 +68,7 @@ lprprobe(vm_offset_t port, struct bus_ctlr *dev)
 	int ret;
 
 	if ((unit < 0) || (unit >= NLPR)) {
-		printf("com %d out of range\n", unit);
+		printf("lpr %d out of range\n", unit);
 		return(0);
 	}
 
